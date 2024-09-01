@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Send, Plus, Trash2, PenSquare, Check, UserIcon, BotIcon, Copy } from "lucide-react";
+import { Menu, Send, Plus, Trash2, PenSquare, Check, UserIcon, BotIcon, Copy, Paperclip, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { streamMessage, ChatMessage, Chat } from "../actions/stream-message";
 import { readStreamableValue } from 'ai/rsc';
@@ -22,6 +22,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ChatInput } from "./components/ChatInput";
 import { useResizable } from '../hooks/useResizable';
 
+// Update the ChatMessage type to include image content
 type ChatMessageContent = string | { type: 'text'; text: string } | { type: 'image'; image: string };
 
 interface ChatMessage {
@@ -213,25 +214,25 @@ export default function Home() {
           <div className="bg-zinc-700 p-4 flex justify-between items-center">
             <button
               onClick={() => setSidebarOpen(false)}
-              className="text-zinc-400 hover:text-zinc-200"
+              className="text-zinc-400 hover:text-zinc-200 transition-colors"
             >
-              <Menu size={24} />
+              <ChevronLeft size={24} />
             </button>
             <button
               onClick={createNewChat}
-              className="text-zinc-400 hover:text-zinc-200"
+              className="text-zinc-400 hover:text-zinc-200 transition-colors"
             >
               <Plus size={24} />
             </button>
           </div>
-          <div className="p-4">
+          <div className="flex-1 overflow-y-auto">
             {chats.slice().reverse().map(chat => (
               <div 
                 key={chat.id} 
-                className="cursor-pointer p-2 hover:bg-zinc-700 rounded flex justify-between items-center group"
+                className={`cursor-pointer p-3 hover:bg-zinc-700 rounded-lg m-2 flex justify-between items-center group transition-colors ${currentChatId === chat.id ? 'bg-zinc-700' : ''}`}
                 onClick={() => setCurrentChatId(chat.id)}
               >
-                <span>{chat.name}</span>
+                <span className="truncate flex-1">{chat.name}</span>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <button
@@ -239,7 +240,7 @@ export default function Home() {
                         e.stopPropagation();
                         setChatToDelete(chat.id);
                       }}
-                      className="text-zinc-400 hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-zinc-400 hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity ml-2"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -261,7 +262,7 @@ export default function Home() {
             ))}
           </div>
           <div 
-            className="absolute top-0 right-0 w-1 h-full cursor-ew-resize bg-zinc-700 hover:bg-zinc-600"
+            className="absolute top-0 right-0 w-1 h-full cursor-ew-resize bg-zinc-700 hover:bg-zinc-600 transition-colors"
             onMouseDown={initResize}
           />
         </div>
@@ -269,13 +270,13 @@ export default function Home() {
         <div className="bg-zinc-800 p-4 flex flex-col items-center space-y-6">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-zinc-400 hover:text-zinc-200"
+            className="text-zinc-400 hover:text-zinc-200 transition-colors"
           >
-            <Menu size={24} />
+            <ChevronRight size={24} />
           </button>
           <button
             onClick={createNewChat}
-            className="text-zinc-400 hover:text-zinc-200"
+            className="text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             <Plus size={24} />
           </button>
