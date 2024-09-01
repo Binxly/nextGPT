@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu, Send, Plus, Trash2, PenSquare, Check, UserIcon, BotIcon, Copy } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { streamMessage, ChatMessage, Chat } from "../actions/stream-message";
 import { readStreamableValue } from 'ai/rsc';
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +21,41 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ChatInput } from "./components/ChatInput";
 import { useResizable } from '../hooks/useResizable';
+
+type ChatMessageContent = string | { type: 'text'; text: string } | { type: 'image'; image: string };
+
+interface ChatMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: ChatMessageContent | ChatMessageContent[];
+}
+
+const ChatMessage = memo(({ msg }: { msg: ChatMessage }) => (
+  <motion.div
+    key={msg.id}
+    className="flex flex-row gap-2 mb-4"
+    initial={{ y: 5, opacity: 0 }}
+    animate={{ y: 0, opacity: 1 }}
+  >
+    <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
+      {msg.role === "assistant" ? <BotIcon /> : <UserIcon />}
+    </div>
+    <div className={`p-3 rounded-lg max-w-[80%] ${msg.role === "assistant" ? "bg-zinc-800" : "bg-blue-900"} prose`}>
+      {Array.isArray(msg.content) ? (
+        msg.content.map((content, index) => (
+          <div key={index}>
+            {content.type === 'text' && <ReactMarkdown>{content.text}</ReactMarkdown>}
+            {content.type === 'image' && (
+              <img src={content.image} alt="User uploaded" className="max-w-full h-auto rounded mt-2" />
+            )}
+          </div>
+        ))
+      ) : (
+        <ReactMarkdown>{msg.content}</ReactMarkdown>
+      )}
+    </div>
+  </motion.div>
+));
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -78,7 +113,7 @@ export default function Home() {
     }
   }, [currentChatId, chats]);
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = async (message: string, imageUrl?: string) => {
     let chatId = currentChatId;
 
     if (!chatId) {
@@ -96,7 +131,12 @@ export default function Home() {
     const newUserMessage: ChatMessage = {
       id: Date.now(),
       role: "user",
-      content: message,
+      content: imageUrl
+        ? [
+            { type: 'text', text: message },
+            { type: 'image', image: imageUrl }
+          ]
+        : message,
     };
 
     setChats(prevChats => prevChats.map(chat => 
@@ -163,7 +203,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="bg-zinc-900 text-zinc-300 min-h-screen flex">
+    <div className="bg-zinc-900 text-zinc-300 h-screen flex overflow-hidden">
       {sidebarOpen ? (
         <div 
           ref={sidebarRef}
@@ -242,7 +282,7 @@ export default function Home() {
         </div>
       )}
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-zinc-700 flex justify-center items-center">
           {isEditingTitle ? (
             <>
@@ -279,69 +319,11 @@ export default function Home() {
           )}
         </div>
         
-        <div className="flex-1 overflow-y-auto p-4 flex justify-center">
-          <div className="w-full max-w-[800px]">
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="w-full max-w-[800px] mx-auto">
             <AnimatePresence>
               {currentChatId && chats.find(chat => chat.id === currentChatId)?.messages.map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  className="flex flex-row gap-2 mb-4"
-                  initial={{ y: 5, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                >
-                  <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
-                    {msg.role === "assistant" ? <BotIcon /> : <UserIcon />}
-                  </div>
-                  <div className={`p-3 rounded-lg max-w-[80%] ${msg.role === "assistant" ? "bg-zinc-800" : "bg-blue-900"} prose`}>
-                    <ReactMarkdown
-                      components={{
-                        code({node, inline, className, children, ...props}) {
-                          const match = /language-(\w+)/.exec(className || '')
-                          return !inline && match ? (
-                            <div className="relative">
-                              <div className="absolute top-2 right-2 flex items-center space-x-2">
-                                {copiedStates[String(node.position?.start.line)] && (
-                                  <span className="text-green-500">
-                                    <Check size={18} />
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => copyToClipboard(String(children), String(node.position?.start.line))}
-                                  className="text-zinc-400 hover:text-zinc-200"
-                                >
-                                  <Copy size={18} />
-                                </button>
-                              </div>
-                              <SyntaxHighlighter
-                                style={oneDark}
-                                language={match[1]}
-                                PreTag="div"
-                                className="bg-zinc-900 p-2 rounded my-2"
-                                {...props}
-                              >
-                                {String(children).replace(/\n$/, '')}
-                              </SyntaxHighlighter>
-                            </div>
-                          ) : (
-                            <code className="bg-zinc-900 px-1 rounded" {...props}>
-                              {children}
-                            </code>
-                          )
-                        },
-                        h1: ({node, ...props}) => <h1 className="text-2xl font-bold my-4" {...props} />,
-                        h2: ({node, ...props}) => <h2 className="text-xl font-semibold my-3" {...props} />,
-                        h3: ({node, ...props}) => <h3 className="text-lg font-medium my-2" {...props} />,
-                        p: ({node, ...props}) => <p className="my-2" {...props} />,
-                        ul: ({node, ...props}) => <ul className="list-disc list-inside my-2" {...props} />,
-                        ol: ({node, ...props}) => <ol className="list-decimal list-inside my-2" {...props} />,
-                        li: ({node, ...props}) => <li className="my-1" {...props} />,
-                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-zinc-500 pl-4 my-2 italic" {...props} />,
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-                </motion.div>
+                <ChatMessage key={msg.id} msg={msg} />
               ))}
               {isStreaming && (
                 <motion.div
