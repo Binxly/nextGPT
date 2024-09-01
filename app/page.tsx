@@ -1,10 +1,10 @@
 "use client";
 
-import { Menu, Send, Plus, Trash2, PenSquare, Check, Paperclip } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
-import TextareaAutosize from "react-textarea-autosize";
+import { Menu, Send, Plus, Trash2, PenSquare, Check, UserIcon, BotIcon, Copy } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { streamMessage, ChatMessage, Chat } from "../actions/stream-message";
 import { readStreamableValue } from 'ai/rsc';
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,13 +16,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { ChatInput } from "./components/ChatInput";
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [message, setMessage] = useState("");
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -31,6 +33,8 @@ export default function Home() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({});
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const storedChats = localStorage.getItem('chats');
@@ -45,7 +49,7 @@ export default function Home() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages, streamingMessage]);
+  }, [chats, streamingMessage]);
 
   const createNewChat = () => {
     const newChat: Chat = {
@@ -56,6 +60,8 @@ export default function Home() {
     setChats([...chats, newChat]);
     setCurrentChatId(newChat.id);
     setChatTitle(newChat.name);
+    // Focus the chat input after creating a new chat
+    setTimeout(() => chatInputRef.current?.focus(), 0);
   };
 
   useEffect(() => {
@@ -69,8 +75,8 @@ export default function Home() {
     }
   }, [currentChatId, chats]);
 
-  const handleSendMessage = async () => {
-    if (!message.trim() || !currentChatId) return;
+  const handleSendMessage = async (message: string) => {
+    if (!currentChatId) return;
 
     const newUserMessage: ChatMessage = {
       id: Date.now(),
@@ -83,7 +89,6 @@ export default function Home() {
         ? { ...chat, messages: [...chat.messages, newUserMessage] }
         : chat
     ));
-    setMessage("");
     setIsStreaming(true);
 
     const currentChat = chats.find(chat => chat.id === currentChatId);
@@ -102,13 +107,6 @@ export default function Home() {
     ));
     setStreamingMessage("");
     setIsStreaming(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
   };
 
   const handleDeleteChat = (chatId: string) => {
@@ -134,20 +132,32 @@ export default function Home() {
     setIsEditingTitle(false);
   };
 
+  const copyToClipboard = useCallback((text: string, id: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedStates(prev => ({ ...prev, [id]: true }));
+      setTimeout(() => {
+        setCopiedStates(prev => ({ ...prev, [id]: false }));
+      }, 2000); // Hide checkmark after 2 seconds
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+    });
+  }, []);
+
   return (
-    <div className="bg-gray-950 text-gray-100 min-h-screen flex">
+    <div className="bg-zinc-900 text-zinc-300 min-h-screen flex">
+      {/* Sidebar */}
       {sidebarOpen ? (
-        <div className="w-[300px] bg-gray-900 border-r border-gray-800 relative">
-          <div className="bg-gray-800 p-4 flex justify-between items-center">
+        <div className="w-[300px] bg-zinc-800 border-r border-zinc-700 relative">
+          <div className="bg-zinc-700 p-4 flex justify-between items-center">
             <button
               onClick={() => setSidebarOpen(false)}
-              className="text-gray-300 hover:text-white"
+              className="text-zinc-400 hover:text-zinc-200"
             >
               <Menu size={24} />
             </button>
             <button
               onClick={createNewChat}
-              className="text-gray-300 hover:text-white"
+              className="text-zinc-400 hover:text-zinc-200"
             >
               <Plus size={24} />
             </button>
@@ -156,7 +166,7 @@ export default function Home() {
             {chats.slice().reverse().map(chat => (
               <div 
                 key={chat.id} 
-                className="cursor-pointer p-2 hover:bg-gray-800 rounded flex justify-between items-center group"
+                className="cursor-pointer p-2 hover:bg-zinc-700 rounded flex justify-between items-center group"
                 onClick={() => setCurrentChatId(chat.id)}
               >
                 <span>{chat.name}</span>
@@ -167,7 +177,7 @@ export default function Home() {
                         e.stopPropagation();
                         setChatToDelete(chat.id);
                       }}
-                      className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-zinc-400 hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -190,23 +200,26 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        <div className="bg-gray-800 p-4 flex flex-col items-center space-y-4">
+        <div className="bg-zinc-800 p-4 flex flex-col items-center space-y-6">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-gray-300 hover:text-white"
+            className="text-zinc-400 hover:text-zinc-200"
           >
             <Menu size={24} />
           </button>
           <button
             onClick={createNewChat}
-            className="text-gray-300 hover:text-white"
+            className="text-zinc-400 hover:text-zinc-200"
           >
             <Plus size={24} />
           </button>
         </div>
       )}
+      
+      {/* Main chat area */}
       <div className="flex-1 flex flex-col">
-        <div className="p-4 border-b border-gray-800 flex justify-center items-center">
+        {/* Chat title */}
+        <div className="p-4 border-b border-zinc-700 flex justify-center items-center">
           {isEditingTitle ? (
             <>
               <input
@@ -214,7 +227,7 @@ export default function Home() {
                 type="text"
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
-                className="text-2xl font-bold bg-gray-800 text-gray-100 rounded px-2"
+                className="text-2xl font-bold bg-zinc-800 text-zinc-300 rounded px-2"
                 onBlur={handleSaveTitle}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -223,7 +236,7 @@ export default function Home() {
                 }}
               />
               <button
-                className="ml-2 text-gray-400 hover:text-gray-200"
+                className="ml-2 text-zinc-400 hover:text-zinc-200"
                 onClick={handleSaveTitle}
               >
                 <Check size={20} />
@@ -233,7 +246,7 @@ export default function Home() {
             <>
               <h1 className="text-2xl font-bold">{chatTitle}</h1>
               <button
-                className="ml-2 text-gray-400 hover:text-gray-200"
+                className="ml-2 text-zinc-400 hover:text-zinc-200"
                 onClick={handleEditTitle}
               >
                 <PenSquare size={20} />
@@ -241,50 +254,138 @@ export default function Home() {
             </>
           )}
         </div>
+        
+        {/* Chat messages */}
         <div className="flex-1 overflow-y-auto p-4 flex justify-center">
-          <div className="w-full max-w-[800px] bg-gray-900 rounded-lg p-4">
-            <div className="space-y-4">
+          <div className="w-full max-w-[800px]">
+            <AnimatePresence>
               {currentChatId && chats.find(chat => chat.id === currentChatId)?.messages.map((msg) => (
-                <div key={msg.id} className={`flex justify-${msg.role === "assistant" ? "start" : "end"}`}>
-                  <div className={`${msg.role === "assistant" ? "bg-indigo-600" : "bg-gray-700"} p-3 rounded-lg max-w-[80%]`}>
-                    <p>{msg.content}</p>
+                <motion.div
+                  key={msg.id}
+                  className="flex flex-row gap-2 mb-4"
+                  initial={{ y: 5, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                >
+                  <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
+                    {msg.role === "assistant" ? <BotIcon /> : <UserIcon />}
                   </div>
-                </div>
+                  <div className={`p-3 rounded-lg max-w-[80%] ${msg.role === "assistant" ? "bg-zinc-800" : "bg-blue-900"} prose`}>
+                    <ReactMarkdown
+                      components={{
+                        code({node, inline, className, children, ...props}) {
+                          const match = /language-(\w+)/.exec(className || '')
+                          return !inline && match ? (
+                            <div className="relative">
+                              <div className="absolute top-2 right-2 flex items-center space-x-2">
+                                {copiedStates[String(node.position?.start.line)] && (
+                                  <span className="text-green-500">
+                                    <Check size={18} />
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => copyToClipboard(String(children), String(node.position?.start.line))}
+                                  className="text-zinc-400 hover:text-zinc-200"
+                                >
+                                  <Copy size={18} />
+                                </button>
+                              </div>
+                              <SyntaxHighlighter
+                                style={oneDark}
+                                language={match[1]}
+                                PreTag="div"
+                                className="bg-zinc-900 p-2 rounded my-2"
+                                {...props}
+                              >
+                                {String(children).replace(/\n$/, '')}
+                              </SyntaxHighlighter>
+                            </div>
+                          ) : (
+                            <code className="bg-zinc-900 px-1 rounded" {...props}>
+                              {children}
+                            </code>
+                          )
+                        },
+                        h1: ({node, ...props}) => <h1 className="text-2xl font-bold my-4" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-xl font-semibold my-3" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-lg font-medium my-2" {...props} />,
+                        p: ({node, ...props}) => <p className="my-2" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc list-inside my-2" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal list-inside my-2" {...props} />,
+                        li: ({node, ...props}) => <li className="my-1" {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-zinc-500 pl-4 my-2 italic" {...props} />,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
               ))}
               {isStreaming && (
-                <div className="flex justify-start">
-                  <div className="bg-indigo-600 p-3 rounded-lg max-w-[80%]">
-                    <p>{streamingMessage}</p>
+                <motion.div
+                  className="flex flex-row gap-2 mb-4"
+                  initial={{ y: 5, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                >
+                  <div className="size-[24px] flex flex-col justify-center items-center flex-shrink-0 text-zinc-400">
+                    <BotIcon />
                   </div>
-                </div>
+                  <div className="bg-zinc-800 p-3 rounded-lg max-w-[80%] prose">
+                    <ReactMarkdown
+                      components={{
+                        code({node, inline, className, children, ...props}) {
+                          const match = /language-(\w+)/.exec(className || '')
+                          return !inline && match ? (
+                            <div className="relative">
+                              <button
+                                onClick={() => copyToClipboard(String(children))}
+                                className="absolute top-2 right-2 text-zinc-400 hover:text-zinc-200"
+                              >
+                                <Copy size={18} />
+                              </button>
+                              <SyntaxHighlighter
+                                style={oneDark}
+                                language={match[1]}
+                                PreTag="div"
+                                className="bg-zinc-900 p-2 rounded my-2"
+                                {...props}
+                              >
+                                {String(children).replace(/\n$/, '')}
+                              </SyntaxHighlighter>
+                            </div>
+                          ) : (
+                            <code className="bg-zinc-900 px-1 rounded" {...props}>
+                              {children}
+                            </code>
+                          )
+                        },
+                        h1: ({node, ...props}) => <h1 className="text-2xl font-bold my-4" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-xl font-semibold my-3" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-lg font-medium my-2" {...props} />,
+                        p: ({node, ...props}) => <p className="my-2" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc list-inside my-2" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal list-inside my-2" {...props} />,
+                        li: ({node, ...props}) => <li className="my-1" {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-zinc-500 pl-4 my-2 italic" {...props} />,
+                      }}
+                    >
+                      {streamingMessage}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
               )}
-              <div ref={chatEndRef} />
-            </div>
+            </AnimatePresence>
+            <div ref={chatEndRef} />
           </div>
         </div>
-        <div className="p-4 border-t border-gray-800">
-          <div className="max-w-[800px] mx-auto relative">
-            <TextareaAutosize
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your message..."
-              className="w-full bg-gray-900 text-gray-100 rounded-lg p-3 pr-24 resize-none"
-              minRows={2}
+        
+        {/* Input area */}
+        <div className="p-4 border-t border-zinc-700">
+          <div className="max-w-[800px] mx-auto">
+            <ChatInput 
+              onSendMessage={handleSendMessage} 
+              isStreaming={isStreaming} 
+              ref={chatInputRef}
             />
-            <button
-              className="absolute left-2 bottom-2 text-gray-300 hover:text-white"
-              onClick={() => {/* Add attachment functionality here */}}
-            >
-              <Paperclip size={24} />
-            </button>
-            <button
-              className="absolute right-2 bottom-2 text-gray-300 hover:text-white"
-              onClick={handleSendMessage}
-              disabled={isStreaming}
-            >
-              <Send size={24} />
-            </button>
           </div>
         </div>
       </div>
