@@ -20,6 +20,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ChatInput } from "./components/ChatInput";
+import { useResizable } from '../hooks/useResizable';
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -35,6 +36,9 @@ export default function Home() {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({});
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(250);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const { initResize } = useResizable(sidebarRef, setSidebarWidth, 150, 300);
 
   useEffect(() => {
     const storedChats = localStorage.getItem('chats');
@@ -60,7 +64,6 @@ export default function Home() {
     setChats([...chats, newChat]);
     setCurrentChatId(newChat.id);
     setChatTitle(newChat.name);
-    // Focus the chat input after creating a new chat
     setTimeout(() => chatInputRef.current?.focus(), 0);
   };
 
@@ -76,7 +79,19 @@ export default function Home() {
   }, [currentChatId, chats]);
 
   const handleSendMessage = async (message: string) => {
-    if (!currentChatId) return;
+    let chatId = currentChatId;
+
+    if (!chatId) {
+      const newChat: Chat = {
+        id: Date.now().toString(),
+        name: `New Chat ${chats.length + 1}`,
+        messages: []
+      };
+      setChats(prevChats => [...prevChats, newChat]);
+      setCurrentChatId(newChat.id);
+      setChatTitle(newChat.name);
+      chatId = newChat.id;
+    }
 
     const newUserMessage: ChatMessage = {
       id: Date.now(),
@@ -85,26 +100,30 @@ export default function Home() {
     };
 
     setChats(prevChats => prevChats.map(chat => 
-      chat.id === currentChatId 
+      chat.id === chatId 
         ? { ...chat, messages: [...chat.messages, newUserMessage] }
         : chat
     ));
+
     setIsStreaming(true);
 
-    const currentChat = chats.find(chat => chat.id === currentChatId);
-    const { output } = await streamMessage([...currentChat!.messages, newUserMessage]);
+    const currentChat = chats.find(chat => chat.id === chatId);
+    const chatMessages = currentChat ? [...currentChat.messages, newUserMessage] : [newUserMessage];
+
+    const { output } = await streamMessage(chatMessages);
 
     let fullAssistantMessage = "";
     for await (const delta of readStreamableValue(output)) {
       fullAssistantMessage += delta;
-      setStreamingMessage(prev => prev + delta);
+      setStreamingMessage(currentMessage => currentMessage + delta);
     }
 
     setChats(prevChats => prevChats.map(chat => 
-      chat.id === currentChatId 
+      chat.id === chatId 
         ? { ...chat, messages: [...chat.messages, { id: Date.now(), role: "assistant", content: fullAssistantMessage }] }
         : chat
     ));
+
     setStreamingMessage("");
     setIsStreaming(false);
   };
@@ -137,7 +156,7 @@ export default function Home() {
       setCopiedStates(prev => ({ ...prev, [id]: true }));
       setTimeout(() => {
         setCopiedStates(prev => ({ ...prev, [id]: false }));
-      }, 2000); // Hide checkmark after 2 seconds
+      }, 2000);
     }).catch(err => {
       console.error('Failed to copy text: ', err);
     });
@@ -145,9 +164,12 @@ export default function Home() {
 
   return (
     <div className="bg-zinc-900 text-zinc-300 min-h-screen flex">
-      {/* Sidebar */}
       {sidebarOpen ? (
-        <div className="w-[300px] bg-zinc-800 border-r border-zinc-700 relative">
+        <div 
+          ref={sidebarRef}
+          className="bg-zinc-800 border-r border-zinc-700 relative flex flex-col"
+          style={{ width: `${sidebarWidth}px` }}
+        >
           <div className="bg-zinc-700 p-4 flex justify-between items-center">
             <button
               onClick={() => setSidebarOpen(false)}
@@ -198,6 +220,10 @@ export default function Home() {
               </div>
             ))}
           </div>
+          <div 
+            className="absolute top-0 right-0 w-1 h-full cursor-ew-resize bg-zinc-700 hover:bg-zinc-600"
+            onMouseDown={initResize}
+          />
         </div>
       ) : (
         <div className="bg-zinc-800 p-4 flex flex-col items-center space-y-6">
@@ -216,9 +242,7 @@ export default function Home() {
         </div>
       )}
       
-      {/* Main chat area */}
       <div className="flex-1 flex flex-col">
-        {/* Chat title */}
         <div className="p-4 border-b border-zinc-700 flex justify-center items-center">
           {isEditingTitle ? (
             <>
@@ -255,7 +279,6 @@ export default function Home() {
           )}
         </div>
         
-        {/* Chat messages */}
         <div className="flex-1 overflow-y-auto p-4 flex justify-center">
           <div className="w-full max-w-[800px]">
             <AnimatePresence>
@@ -378,7 +401,6 @@ export default function Home() {
           </div>
         </div>
         
-        {/* Input area */}
         <div className="p-4 border-t border-zinc-700">
           <div className="max-w-[800px] mx-auto">
             <ChatInput 
