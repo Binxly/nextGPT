@@ -18,12 +18,6 @@ A Next.js-based AI chat application that allows users to have conversations with
 4. Run the development server: `npm run dev`
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Project Structure
-
-- `app/page.tsx`: Main chat interface component
-- `actions/stream-message.ts`: Server action for streaming AI responses
-- `components/ui/`: UI components
-
 ## Customization
 
 You can customize the AI model and system prompt in the `streamMessage` function in `actions/stream-message.ts`.
