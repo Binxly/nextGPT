@@ -1,6 +1,6 @@
 # AI Chat Application
 
-A Next.js-based AI chat application that allows users to have conversations with an AI assistant powered by OpenAI's GPT models.
+A Next.js AI chat application that allows users to have conversations with an AI assistant powered by OpenAI's GPT models.
 
 ## Features
 
