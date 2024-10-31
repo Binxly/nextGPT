@@ -21,11 +21,3 @@ A Next.js AI chat application that allows users to have conversations with an AI
 ## Customization
 
 You can customize the AI model and system prompt in the `streamMessage` function in `actions/stream-message.ts`.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-[MIT License](LICENSE)
